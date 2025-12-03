@@ -48,7 +48,7 @@ async function checkBadges() {
 cron.schedule("*/10 * * * *", checkNews);
 cron.schedule("*/15 * * * *", checkBadges);
 
-client.once("ready", () => {
+client.once("clientReady", () => {
     console.log(`Bot online como ${client.user.tag}`);
 });
 
