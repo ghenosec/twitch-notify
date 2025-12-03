@@ -12,16 +12,30 @@ const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const parser = new Parser();
 
 let lastNewsLink = "";
-let lastBadgeCount = 0;
+
+let knownBadges = {};
 
 async function checkNews() {
     try {
-        const feed = await parser.parseURL("https://blog.twitch.tv/pt-br/feed");
+        const response = await axios.get("https://blog.twitch.tv/en/feed", {
+            responseType: "text",
+            decompress: true,
+            transformResponse: r => r
+        });
+
+        const feed = await parser.parseString(response.data);
+
+        if (!feed.items || feed.items.length === 0) return;
+
         const newest = feed.items[0];
 
         if (newest.link !== lastNewsLink) {
             const channel = await client.channels.fetch(DISCORD_CHANNEL_ID);
-            channel.send(`📰 **Nova notícia da Twitch:**\n${newest.title}\n${newest.link}`);
+
+            await channel.send(
+                `📰 **Nova notícia da Twitch:**\n${newest.title}\n${newest.link}`
+            );
+
             lastNewsLink = newest.link;
         }
     } catch (err) {
@@ -33,23 +47,60 @@ async function checkBadges() {
     try {
         const res = await axios.get("https://badges.twitch.tv/v1/badges/global/display");
         const badges = res.data.badge_sets;
-        const count = Object.keys(badges).length;
 
-        if (count > lastBadgeCount) {
-            const channel = await client.channels.fetch(DISCORD_CHANNEL_ID);
-            channel.send("🆕 **Novos emblemas globais adicionados na Twitch!**");
-            lastBadgeCount = count;
+        const channel = await client.channels.fetch(DISCORD_CHANNEL_ID);
+
+        let newBadgesFound = [];
+
+        for (const setName of Object.keys(badges)) {
+            const versions = badges[setName].versions;
+
+            for (const version of Object.keys(versions)) {
+                const badgeId = `${setName}_${version}`;
+
+                if (!knownBadges[badgeId]) {
+                    const badge = versions[version];
+
+                    newBadgesFound.push({
+                        id: badgeId,
+                        name: badge.title || setName,
+                        image: badge.image_url_4x || badge.image_url_2x || badge.image_url_1x
+                    });
+
+                    knownBadges[badgeId] = true;
+                }
+            }
         }
+
+        if (newBadgesFound.length > 0) {
+            for (const badge of newBadgesFound) {
+                await channel.send({
+                    content: `🆕 **Nova badge adicionada:** ${badge.name}`,
+                    files: [badge.image]
+                });
+            }
+        }
+
     } catch (err) {
         console.error("Erro ao verificar badges:", err.message);
     }
 }
 
 cron.schedule("*/10 * * * *", checkNews);
+
 cron.schedule("*/15 * * * *", checkBadges);
+
 
 client.once("clientReady", () => {
     console.log(`Bot online como ${client.user.tag}`);
 });
 
 client.login(DISCORD_TOKEN);
+
+process.on("unhandledRejection", (err) => {
+    console.log("Erro não tratado:", err);
+});
+
+process.on("uncaughtException", (err) => {
+    console.log("Erro fatal capturado:", err);
+});
