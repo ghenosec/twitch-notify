@@ -17,7 +17,7 @@ let knownBadges = {};
 
 async function checkNews() {
     try {
-        const feed = await parser.parseURL("https://blog.twitch.tv/pt-br/feed");
+        const feed = await parser.parseURL("https://blog.twitch.tv/en/feed");
 
         if (!feed.items || feed.items.length === 0) return;
 
